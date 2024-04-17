@@ -148,9 +148,11 @@ def expand_grouped_metadata(annotations: Iterable[Any]) -> Iterable[Any]:
     from pydantic.fields import FieldInfo  # circular import
 
     for annotation in annotations:
-        if isinstance(annotation, at.GroupedMetadata):
-            yield from annotation
-        elif isinstance(annotation, FieldInfo):
+        # Protocol's isinstance check is pretty slow
+        # if isinstance(annotation, at.GroupedMetadata):
+        #     yield from annotation
+        # elif isinstance(annotation, FieldInfo):
+        if isinstance(annotation, FieldInfo):
             yield from annotation.metadata
             # this is a bit problematic in that it results in duplicate metadata
             # all of our "consumers" can handle it, but it is not ideal

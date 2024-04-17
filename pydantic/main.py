@@ -143,7 +143,15 @@ class BaseModel(metaclass=_model_construction.ModelMetaclass):
         model_fields = {}
         model_computed_fields = {}
 
-        __pydantic_decorators__ = _decorators.DecoratorInfos()
+        __pydantic_decorators__ = _decorators.DecoratorInfos(
+            validators={},
+            field_validators={},
+            root_validators={},
+            field_serializers={},
+            model_serializers={},
+            model_validators={},
+            computed_fields={},
+        )
         __pydantic_parent_namespace__ = None
         # Prevent `BaseModel` from being instantiated directly:
         __pydantic_validator__ = _mock_val_ser.MockValSer(

@@ -21,7 +21,7 @@ if TYPE_CHECKING:
     from ..functional_validators import FieldValidatorModes
 
 
-@dataclass(**slots_true)
+@dataclass(**slots_true, frozen=True)
 class ValidatorDecoratorInfo:
     """A container for data from `@validator` so that we can access it
     while building the pydantic-core schema.
@@ -45,7 +45,7 @@ class ValidatorDecoratorInfo:
     check_fields: bool | None
 
 
-@dataclass(**slots_true)
+@dataclass(**slots_true, frozen=True)
 class FieldValidatorDecoratorInfo:
     """A container for data from `@field_validator` so that we can access it
     while building the pydantic-core schema.
@@ -64,7 +64,7 @@ class FieldValidatorDecoratorInfo:
     check_fields: bool | None
 
 
-@dataclass(**slots_true)
+@dataclass(**slots_true, frozen=True)
 class RootValidatorDecoratorInfo:
     """A container for data from `@root_validator` so that we can access it
     while building the pydantic-core schema.
@@ -78,7 +78,7 @@ class RootValidatorDecoratorInfo:
     mode: Literal['before', 'after']
 
 
-@dataclass(**slots_true)
+@dataclass(**slots_true, frozen=True)
 class FieldSerializerDecoratorInfo:
     """A container for data from `@field_serializer` so that we can access it
     while building the pydantic-core schema.
@@ -101,7 +101,7 @@ class FieldSerializerDecoratorInfo:
     check_fields: bool | None
 
 
-@dataclass(**slots_true)
+@dataclass(**slots_true, frozen=True)
 class ModelSerializerDecoratorInfo:
     """A container for data from `@model_serializer` so that we can access it
     while building the pydantic-core schema.
@@ -120,7 +120,7 @@ class ModelSerializerDecoratorInfo:
     when_used: core_schema.WhenUsed
 
 
-@dataclass(**slots_true)
+@dataclass(**slots_true, frozen=True)
 class ModelValidatorDecoratorInfo:
     """A container for data from `@model_validator` so that we can access it
     while building the pydantic-core schema.
@@ -198,7 +198,7 @@ class PydanticDescriptorProxy(Generic[ReturnType]):
 DecoratorInfoType = TypeVar('DecoratorInfoType', bound=DecoratorInfo)
 
 
-@dataclass(**slots_true)
+@dataclass(**slots_true, frozen=True)
 class Decorator(Generic[DecoratorInfoType]):
     """A generic container class to join together the decorator metadata
     (metadata from decorator itself, which we have when the
@@ -394,7 +394,7 @@ def get_attribute_from_base_dicts(tp: type[Any], name: str) -> Any:
     return tp.__dict__[name]  # raise the error
 
 
-@dataclass(**slots_true)
+@dataclass(**slots_true, frozen=True)
 class DecoratorInfos:
     """Mapping of name in the class namespace to decorator info.
 
@@ -402,13 +402,25 @@ class DecoratorInfos:
     not the field name!
     """
 
-    validators: dict[str, Decorator[ValidatorDecoratorInfo]] = field(default_factory=dict)
-    field_validators: dict[str, Decorator[FieldValidatorDecoratorInfo]] = field(default_factory=dict)
-    root_validators: dict[str, Decorator[RootValidatorDecoratorInfo]] = field(default_factory=dict)
-    field_serializers: dict[str, Decorator[FieldSerializerDecoratorInfo]] = field(default_factory=dict)
-    model_serializers: dict[str, Decorator[ModelSerializerDecoratorInfo]] = field(default_factory=dict)
-    model_validators: dict[str, Decorator[ModelValidatorDecoratorInfo]] = field(default_factory=dict)
-    computed_fields: dict[str, Decorator[ComputedFieldInfo]] = field(default_factory=dict)
+    validators: dict[str, Decorator[ValidatorDecoratorInfo]]
+    field_validators: dict[str, Decorator[FieldValidatorDecoratorInfo]]
+    root_validators: dict[str, Decorator[RootValidatorDecoratorInfo]]
+    field_serializers: dict[str, Decorator[FieldSerializerDecoratorInfo]]
+    model_serializers: dict[str, Decorator[ModelSerializerDecoratorInfo]]
+    model_validators: dict[str, Decorator[ModelValidatorDecoratorInfo]]
+    computed_fields: dict[str, Decorator[ComputedFieldInfo]]
+
+    def __hash__(self) -> int:
+        # These should never be mutated after construction
+        return hash((
+            frozenset(self.validators.items()),
+            frozenset(self.field_validators.items()),
+            frozenset(self.root_validators.items()),
+            frozenset(self.field_serializers.items()),
+            frozenset(self.model_serializers.items()),
+            frozenset(self.model_validators.items()),
+            frozenset(self.computed_fields.items()),
+        ))
 
     @staticmethod
     def build(model_dc: type[Any]) -> DecoratorInfos:  # noqa: C901 (ignore complexity)
@@ -425,18 +437,25 @@ class DecoratorInfos:
         the replaced function was in; that is, we maintain the order.
         """
         # reminder: dicts are ordered and replacement does not alter the order
-        res = DecoratorInfos()
+        validators: dict[str, Decorator[ValidatorDecoratorInfo]] = {}
+        field_validators: dict[str, Decorator[FieldValidatorDecoratorInfo]] = {}
+        root_validators: dict[str, Decorator[RootValidatorDecoratorInfo]] = {}
+        field_serializers: dict[str, Decorator[FieldSerializerDecoratorInfo]] = {}
+        model_serializers: dict[str, Decorator[ModelSerializerDecoratorInfo]] = {}
+        model_validators: dict[str, Decorator[ModelValidatorDecoratorInfo]] = {}
+        computed_fields: dict[str, Decorator[ComputedFieldInfo]] = {}
+
         for base in reversed(mro(model_dc)[1:]):
             existing: DecoratorInfos | None = base.__dict__.get('__pydantic_decorators__')
             if existing is None:
                 existing = DecoratorInfos.build(base)
-            res.validators.update({k: v.bind_to_cls(model_dc) for k, v in existing.validators.items()})
-            res.field_validators.update({k: v.bind_to_cls(model_dc) for k, v in existing.field_validators.items()})
-            res.root_validators.update({k: v.bind_to_cls(model_dc) for k, v in existing.root_validators.items()})
-            res.field_serializers.update({k: v.bind_to_cls(model_dc) for k, v in existing.field_serializers.items()})
-            res.model_serializers.update({k: v.bind_to_cls(model_dc) for k, v in existing.model_serializers.items()})
-            res.model_validators.update({k: v.bind_to_cls(model_dc) for k, v in existing.model_validators.items()})
-            res.computed_fields.update({k: v.bind_to_cls(model_dc) for k, v in existing.computed_fields.items()})
+            validators.update({k: v.bind_to_cls(model_dc) for k, v in existing.validators.items()})
+            field_validators.update({k: v.bind_to_cls(model_dc) for k, v in existing.field_validators.items()})
+            root_validators.update({k: v.bind_to_cls(model_dc) for k, v in existing.root_validators.items()})
+            field_serializers.update({k: v.bind_to_cls(model_dc) for k, v in existing.field_serializers.items()})
+            model_serializers.update({k: v.bind_to_cls(model_dc) for k, v in existing.model_serializers.items()})
+            model_validators.update({k: v.bind_to_cls(model_dc) for k, v in existing.model_validators.items()})
+            computed_fields.update({k: v.bind_to_cls(model_dc) for k, v in existing.computed_fields.items()})
 
         to_replace: list[tuple[str, Any]] = []
 
@@ -444,20 +463,20 @@ class DecoratorInfos:
             if isinstance(var_value, PydanticDescriptorProxy):
                 info = var_value.decorator_info
                 if isinstance(info, ValidatorDecoratorInfo):
-                    res.validators[var_name] = Decorator.build(
+                    validators[var_name] = Decorator.build(
                         model_dc, cls_var_name=var_name, shim=var_value.shim, info=info
                     )
                 elif isinstance(info, FieldValidatorDecoratorInfo):
-                    res.field_validators[var_name] = Decorator.build(
+                    field_validators[var_name] = Decorator.build(
                         model_dc, cls_var_name=var_name, shim=var_value.shim, info=info
                     )
                 elif isinstance(info, RootValidatorDecoratorInfo):
-                    res.root_validators[var_name] = Decorator.build(
+                    root_validators[var_name] = Decorator.build(
                         model_dc, cls_var_name=var_name, shim=var_value.shim, info=info
                     )
                 elif isinstance(info, FieldSerializerDecoratorInfo):
                     # check whether a serializer function is already registered for fields
-                    for field_serializer_decorator in res.field_serializers.values():
+                    for field_serializer_decorator in field_serializers.values():
                         # check that each field has at most one serializer function.
                         # serializer functions for the same field in subclasses are allowed,
                         # and are treated as overrides
@@ -470,25 +489,35 @@ class DecoratorInfos:
                                     f'for field {f!r}, this is not allowed.',
                                     code='multiple-field-serializers',
                                 )
-                    res.field_serializers[var_name] = Decorator.build(
+                    field_serializers[var_name] = Decorator.build(
                         model_dc, cls_var_name=var_name, shim=var_value.shim, info=info
                     )
                 elif isinstance(info, ModelValidatorDecoratorInfo):
-                    res.model_validators[var_name] = Decorator.build(
+                    model_validators[var_name] = Decorator.build(
                         model_dc, cls_var_name=var_name, shim=var_value.shim, info=info
                     )
                 elif isinstance(info, ModelSerializerDecoratorInfo):
-                    res.model_serializers[var_name] = Decorator.build(
+                    model_serializers[var_name] = Decorator.build(
                         model_dc, cls_var_name=var_name, shim=var_value.shim, info=info
                     )
                 else:
                     from ..fields import ComputedFieldInfo
 
                     isinstance(var_value, ComputedFieldInfo)
-                    res.computed_fields[var_name] = Decorator.build(
+                    computed_fields[var_name] = Decorator.build(
                         model_dc, cls_var_name=var_name, shim=None, info=info
                     )
                 to_replace.append((var_name, var_value.wrapped))
+
+        res = DecoratorInfos(
+            validators=validators,
+            field_validators=field_validators,
+            root_validators=root_validators,
+            field_serializers=field_serializers,
+            model_serializers=model_serializers,
+            model_validators=model_validators,
+            computed_fields=computed_fields,
+        )
         if to_replace:
             # If we can save `__pydantic_decorators__` on the class we'll be able to check for it above
             # so then we don't need to re-process the type, which means we can discard our descriptor wrappers

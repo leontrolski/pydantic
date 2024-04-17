@@ -304,6 +304,8 @@ def _get_first_non_null(a: Any, b: Any) -> Any:
     return a if a is not None else b
 
 
+COMMON_FIELD_CACHE = {}
+
 class GenerateSchema:
     """Generate core schema for a Pydantic model, dataclass and types like `str`, `datetime`, ... ."""
 
@@ -1040,6 +1042,8 @@ class GenerateSchema:
     def _common_field_schema(  # C901
         self, name: str, field_info: FieldInfo, decorators: DecoratorInfos
     ) -> _CommonField:
+        common_field_key = name, field_info, decorators
+
         # Update FieldInfo annotation if appropriate:
         from .. import AliasChoices, AliasPath
         from ..fields import FieldInfo
@@ -1082,6 +1086,9 @@ class GenerateSchema:
                     source_type,
                     annotations,
                 )
+
+        if common_field_key in COMMON_FIELD_CACHE:
+            return COMMON_FIELD_CACHE[common_field_key]
 
         # This V1 compatibility shim should eventually be removed
         # push down any `each_item=True` validators
@@ -1131,7 +1138,7 @@ class GenerateSchema:
         else:
             validation_alias = field_info.validation_alias
 
-        return _common_field(
+        common_field = _common_field(
             schema,
             serialization_exclude=True if field_info.exclude else None,
             validation_alias=validation_alias,
@@ -1139,6 +1146,8 @@ class GenerateSchema:
             frozen=field_info.frozen,
             metadata=metadata,
         )
+        COMMON_FIELD_CACHE[common_field_key] = common_field
+        return common_field
 
     def _union_schema(self, union_type: Any) -> core_schema.CoreSchema:
         """Generate schema for a Union."""
